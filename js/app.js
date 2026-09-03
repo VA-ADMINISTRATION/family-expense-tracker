@@ -43,11 +43,25 @@ async function boot(){
       <p class="ob-sub">This copy of the app doesn't have Supabase credentials filled in. Paste your Project URL and anon key into the SUPABASE_URL / SUPABASE_ANON_KEY lines near the top of the file, then reopen.</p>`;
     return;
   }
+  // Reliable fallback: check the URL directly for a recovery link, in case the
+  // PASSWORD_RECOVERY event fires before this listener is attached (a known
+  // timing race in supabase-js). This catches it regardless of event timing.
+  const hash = window.location.hash || '';
+  const isRecoveryLink = hash.includes('type=recovery');
+  if(hash.includes('error=')){
+    const params = new URLSearchParams(hash.slice(1));
+    document.getElementById('authScreen').innerHTML = `
+      <h1 class="ob-title" style="font-size:24px;">Link didn't work</h1>
+      <p class="ob-sub">${escapeHtml(params.get('error_description') || 'This reset link is invalid or has expired.')}</p>
+      <button class="btn btn-forest" onclick="renderAuth('forgot')">Request a new link</button>`;
+    return;
+  }
   sb.auth.onAuthStateChange((event, sess)=>{
     session = sess;
     if(event==='PASSWORD_RECOVERY'){ authMode='reset'; renderAuth(); }
     if(event==='SIGNED_OUT'){ activeCode=null; family=null; members=[]; expenses=[]; identities=[]; authMode='login'; renderAuth(); document.getElementById('bottomNav').style.display='none'; }
   });
+  if(isRecoveryLink){ authMode='reset'; renderAuth(); return; }
   const { data } = await sb.auth.getSession();
   session = data.session;
   if(session){ await afterLogin(); } else { renderAuth(); }
