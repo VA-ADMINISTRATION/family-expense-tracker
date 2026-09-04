@@ -4,6 +4,14 @@ async function dbGetFamily(code){
   if(error) throw error;
   return data;
 }
+// Used only during "Join with a code" — before the user is a member, so the
+// regular families table can't be queried directly (members-only by policy).
+// This RPC returns just {code, name} for one exact code, no listing/browsing.
+async function dbLookupFamilyByCode(code){
+  const { data, error } = await sb.rpc('lookup_family_by_code', { p_code: code });
+  if(error) throw error;
+  return (data && data.length) ? data[0] : null;
+}
 async function dbCreateFamily(row){
   const { error } = await sb.from('families').insert({ ...row, created_by: session.user.id });
   if(error) throw error;
@@ -28,6 +36,12 @@ async function dbGetMyMemberships(){
 }
 async function dbLeaveFamily(code){
   const { error } = await sb.from('members').delete().eq('family_code', code).eq('user_id', session.user.id);
+  if(error) throw error;
+}
+// Only succeeds if the caller is the family's creator (enforced by RLS) —
+// used to remove someone who joined by mistake.
+async function dbRemoveMember(code, targetUserId){
+  const { error } = await sb.from('members').delete().eq('family_code', code).eq('user_id', targetUserId);
   if(error) throw error;
 }
 async function dbGetExpenses(code){

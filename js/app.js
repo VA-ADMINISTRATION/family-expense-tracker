@@ -16,7 +16,13 @@ let reportRange = 'this';
 let reportMode = 'spending'; // 'spending' | 'balances'
 
 function fmt(n){ return '₹' + Math.round(n).toLocaleString('en-IN'); }
-function todayISO(){ return new Date().toISOString().slice(0,10); }
+function toLocalISO(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function todayISO(){ return toLocalISO(new Date()); }
 function nowTime(){ return new Date().toTimeString().slice(0,5); }
 function expenseCats(){ return categories.filter(c=>c.type!=='income'); }
 function incomeCats(){ return categories.filter(c=>c.type==='income'); }
@@ -280,11 +286,14 @@ async function joinFamily(){
   if(!yourName){ errEl.textContent = 'Please enter your name.'; return; }
   errEl.textContent = 'Checking code…';
   try{
-    const fam = await dbGetFamily(code);
+    const fam = await dbLookupFamilyByCode(code);
     if(!fam){ errEl.textContent = 'No family found with that code.'; return; }
-    const existingMembers = await dbGetMembers(code);
-    if(!existingMembers.find(m=>m.user_id===session.user.id)){
-      await dbAddMember({ family_code:code, name:yourName, color:MEMBER_COLORS[existingMembers.length % MEMBER_COLORS.length] });
+    const randomColor = MEMBER_COLORS[Math.floor(Math.random()*MEMBER_COLORS.length)];
+    try{
+      await dbAddMember({ family_code:code, name:yourName, color:randomColor });
+    }catch(memberErr){
+      // Unique violation = already a member of this family — fine, just continue.
+      if(!String(memberErr.message||'').toLowerCase().includes('duplicate')) throw memberErr;
     }
     activeCode = code; saveActiveCode();
     identities = await dbGetMyMemberships();
@@ -353,7 +362,11 @@ function goTab(tab){
 /* ============================= HOME ============================= */
 function greetingWord(){ const h = new Date().getHours(); return h<12?'Good morning':h<17?'Good afternoon':'Good evening'; }
 function isToday(dateStr){ return dateStr === todayISO(); }
-function isThisMonth(dateStr){ const d=new Date(dateStr), n=new Date(); return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth(); }
+function parseLocalDate(dateStr){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function isThisMonth(dateStr){ const d=parseLocalDate(dateStr), n=new Date(); return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth(); }
 function sumBy(list, pred){ return list.filter(pred).reduce((s,e)=>s+e.amount,0); }
 
 function renderHome(){
@@ -673,7 +686,7 @@ function renderHistory(){
   const dateKeys = Object.keys(groups).sort().reverse();
   const groupsHtml = dateKeys.length ? dateKeys.map(date=>{
     const items = groups[date]; const total = items.reduce((s,e)=>s+e.amount,0);
-    const d = new Date(date);
+    const d = parseLocalDate(date);
     const label = isToday(date) ? 'Today' : d.toLocaleDateString('en-IN',{weekday:'short', day:'2-digit', month:'short'});
     const rows = items.map(e=>{
       const c = isIncome ? catInfo(e.source,'income') : catInfo(e.category);
@@ -747,7 +760,7 @@ function getPeriodRange(type, offset){
     end = new Date(d.getFullYear(), d.getMonth()+1, 0);
     label = offset===0 ? 'This month' : d.toLocaleDateString('en-IN',{month:'long', year:'numeric'});
   }
-  const toISO = x => x.toISOString().slice(0,10);
+  const toISO = toLocalISO;
   return { startISO: toISO(start), endISO: toISO(end), label };
 }
 function setReportPeriodType(type){ reportPeriodType = type; reportOffset = 0; renderReports(); }
@@ -971,7 +984,15 @@ async function addMissingDefaultCategories(){
 /* ============================= SETTINGS ============================= */
 function renderSettings(){
   const me = currentIdentity();
-  const memberRows = members.map(m=>`<div class="member-pill"><span class="dot" style="background:${m.color}; width:10px;height:10px;border-radius:50%; display:inline-block;"></span><span>${m.name}${m.name===me.userName?' (you)':''}</span></div>`).join('');
+  const isCreator = family.created_by === session.user.id;
+  const memberRows = members.map(m=>{
+    const isMe = m.name===me.userName;
+    const canRemove = isCreator && !isMe;
+    return `<div class="member-pill" style="justify-content:space-between; width:100%;">
+      <span style="display:flex; align-items:center; gap:8px;"><span class="dot" style="background:${m.color}; width:10px;height:10px;border-radius:50%; display:inline-block;"></span><span>${m.name}${isMe?' (you)':''}</span></span>
+      ${canRemove ? `<button style="border:none; background:var(--bg); color:var(--danger); font-size:11px; font-weight:600; cursor:pointer; padding:5px 10px; border-radius:8px;" onclick="removeMemberConfirm('${m.user_id}','${escapeHtml(m.name).replace(/'/g,"\\'")}')">Remove</button>` : ''}
+    </div>`;
+  }).join('');
   const isDark = document.body.classList.contains('dark');
 
   document.getElementById('settings').innerHTML = `
@@ -985,7 +1006,7 @@ function renderSettings(){
       <div style="text-align:center; color:var(--ink-soft); font-size:12.5px; margin-top:-6px;">Share this code so someone else can join</div>
     </div>
     ${identities.length>1 ? `<div class="set-card"><div class="set-row" style="cursor:pointer;" onclick="openSwitchFamily()"><span class="lab">You're in ${identities.length} families</span><span class="val">Switch →</span></div></div>` : `<div class="set-card"><div class="set-row" style="cursor:pointer;" onclick="openSwitchFamily()"><span class="lab">Belong to another family too?</span><span class="val">Add →</span></div></div>`}
-    <div class="set-card"><div class="set-row" style="border:none; padding-bottom:6px;"><span class="lab">Members</span></div>${memberRows}</div>
+    <div class="set-card"><div class="set-row" style="border:none; padding-bottom:6px;"><span class="lab">Members${isCreator?' — you can remove someone who joined by mistake':''}</span></div>${memberRows}</div>
     <div class="set-card"><div class="set-row" style="cursor:pointer;" onclick="goBudget()"><span class="lab">Monthly budget</span><span class="val">${family.budget_monthly ? fmt(family.budget_monthly) : 'Set up →'}</span></div></div>
     <div class="set-card"><div class="set-row" style="cursor:pointer;" onclick="openCategories()"><span class="lab">Categories & income sources</span><span class="val">Manage →</span></div></div>
     <div class="set-card">
@@ -995,6 +1016,15 @@ function renderSettings(){
     <button class="btn btn-ghost" style="width:100%; color:var(--danger); margin-top:6px;" onclick="leaveFamily()">Leave this family</button>
     <button class="btn btn-ghost" style="width:100%; margin-top:8px;" onclick="handleSignOut()">Sign out</button>
   `;
+}
+async function removeMemberConfirm(userId, name){
+  if(!confirm(`Remove ${name} from ${family.name}? They'll lose access immediately, but their past expenses stay in the records.`)) return;
+  try{
+    await dbRemoveMember(activeCode, userId);
+    await refreshFamilyData();
+    renderSettings();
+    showToast(`${name} removed`);
+  }catch(e){ showToast('Could not remove — try again'); }
 }
 function setTheme(dark){ document.body.classList.toggle('dark', dark); localStorage.setItem('ledger_theme', dark?'dark':'light'); renderSettings(); }
 async function leaveFamily(){
