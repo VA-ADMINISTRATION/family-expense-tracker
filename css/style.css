@@ -15,7 +15,7 @@ body{ background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans
 .screen.active{ display:block; }
 @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
 
-#onboarding{ min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 26px; }
+#onboarding.active{ min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:32px 26px; }
 .ob-mark{ width:52px;height:52px;border-radius:16px;background:var(--forest); display:flex;align-items:center;justify-content:center; margin-bottom:22px; }
 .ob-mark svg{ width:26px;height:26px; }
 .ob-title{ font-size:34px; font-weight:600; line-height:1.12; margin:0 0 8px; letter-spacing:-0.01em;}
