@@ -215,9 +215,10 @@ function renderOnboarding(mode){
       <h1 class="ob-title">Ledger, kept together.</h1>
       <p class="ob-sub">One shared place for both of you to log spending — no spreadsheet required.</p>
       <div class="ob-choice">
-        <button class="ob-btn primary" onclick="renderOnboarding('create')"><b>Start a new family</b><span>Set a name, get a code to share</span></button>
-        <button class="ob-btn" onclick="renderOnboarding('join')"><b>Join with a code</b><span>Someone already started one</span></button>
+        <button class="ob-btn primary" onclick="renderOnboarding('join')"><b>Join with a code</b><span>Someone already started one — enter their code</span></button>
       </div>
+      <div class="auth-switch">Setting one up for the first time? <a onclick="renderOnboarding('create')">Start a new family</a></div>
+      ${identities.length ? `<div class="auth-switch">Already part of a family? <a onclick="openSwitchFamily()">Switch family</a></div>` : ''}
       <div class="auth-switch" onclick="handleSignOut()"><a>Sign out</a></div>`;
     return;
   }
@@ -254,6 +255,8 @@ async function createFamily(){
   const yourName = document.getElementById('obYourName').value.trim();
   const errEl = document.getElementById('obErr');
   if(!famName || !yourName){ errEl.textContent = 'Please fill in both fields.'; return; }
+  const sure = confirm(`Create a brand-new family called "${famName}"?\n\nOnly do this if you don't already have a code to join. If someone already set one up, go back and use "Join with a code" instead.`);
+  if(!sure) return;
   errEl.textContent = 'Creating…';
   try{
     const code = String(Math.floor(100000 + Math.random()*900000));
@@ -311,7 +314,7 @@ function renderSwitchFamily(){
   document.getElementById('switchFamily').innerHTML = `
     <div class="ax-head">
       <p class="ax-title">Switch family</p>
-      <div class="close-x" onclick="goTab('settings')">✕</div>
+      <div class="close-x" onclick="family ? goTab('settings') : renderOnboarding()">✕</div>
     </div>
     <div class="set-card" style="margin-top:16px;">${rows}</div>
     <div class="ob-choice">

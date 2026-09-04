@@ -7,7 +7,8 @@
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;height:100%;}
-body{ background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; overscroll-behavior:none; }
+html{ background:var(--bg); }
+body{ background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; overscroll-behavior:none; padding-top:env(safe-area-inset-top); }
 .amt, .headline{ font-family:'Fraunces', serif; }
 #app{ max-width:480px; margin:0 auto; min-height:100vh; position:relative; padding-bottom:88px; }
 .screen{ display:none; padding:20px 18px 12px; animation:fade .25s ease; }
